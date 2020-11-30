@@ -11,6 +11,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewTreeObserver;
@@ -30,6 +31,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -37,6 +39,8 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -59,7 +63,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     ObjectAnimator sensorAnimator;
 
     private ConstraintLayout mainContainer;
-    private final String MARKER_JSON_FILE = "markers.json";
+    private final String LATLNG_JSON_FILE = "latlngs.json";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,11 +96,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         });
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-
-    }
 
     @Override
     protected void onPause() {
@@ -104,8 +103,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if(mSensor != null){
             mSensorManager.unregisterListener(this, mSensor);
         }
-
-        //storeJson();
+        storeJson();
     }
 
     @Override
@@ -114,8 +112,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if(mSensor != null){
             mSensorManager.registerListener(this, mSensor, 100000);
         }
-
-        //  restoreJson();
     }
 
     public void onMapReady(GoogleMap googleMap) {
@@ -127,6 +123,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         sensorTextView.setVisibility(View.INVISIBLE);
         exitActionButton.setVisibility(View.INVISIBLE);
         sensorActionButton.setVisibility(View.INVISIBLE);
+
+        restoreJson();
     }
 
     @Override
@@ -182,11 +180,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.moveCamera(CameraUpdateFactory.zoomOut());
     }
 
-    public void onClearMemoryClick(View view) {
-        mMap.clear();
+    public void onClearMemoryClick(View view) throws IOException {
         onExitFABClick(findViewById(R.id.mainView));
+        mMap.clear();
+        markerList.clear();
+        storeJson();
+    }
 
-        //clear JSON file?
+    @Override
+    protected void onStop() {
+        super.onStop();
     }
 
     public void onSensorFABClick(View view) {
@@ -198,7 +201,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             sensorFlag = false;
             sensorTextView.setVisibility(View.INVISIBLE);
         }
-
     }
 
     public void onExitFABClick(View view) {
@@ -224,22 +226,33 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 
+
+
     private void storeJson(){
+
+        List <LatLng> latLngs = new ArrayList<>();
+        int i;
+        for (i=0; i< markerList.size(); i++){
+            latLngs.add(new LatLng(markerList.get(i).getPosition().latitude, markerList.get(i).getPosition().longitude));
+        }
+
         Gson gson = new Gson();
-        String listJson = gson.toJson(markerList);
+        String listJson = gson.toJson(latLngs);
         try {
-            FileOutputStream fileOutputStream = openFileOutput(MARKER_JSON_FILE, MODE_PRIVATE);
+            FileOutputStream fileOutputStream = openFileOutput(LATLNG_JSON_FILE, MODE_PRIVATE);
             FileWriter writer = new FileWriter(fileOutputStream.getFD());
             writer.write(listJson);
+            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
+
     private void restoreJson(){
         int BUFFER_SIZE = 10000;
         Gson gson = new Gson();
         try {
-            FileInputStream fileInputStream = openFileInput(MARKER_JSON_FILE);
+            FileInputStream fileInputStream = openFileInput(LATLNG_JSON_FILE);
             FileReader reader = new FileReader(fileInputStream.getFD());
             char [] buf = new char[BUFFER_SIZE];
             StringBuilder builder = new StringBuilder();
@@ -251,11 +264,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 builder.append(substring);
             }
             reader.close();
+            fileInputStream.close();
             String jsonList = builder.toString();
-            Type collectionType = new TypeToken<List<Marker>>(){}.getType();
-            List<Marker> o = gson.fromJson(jsonList, collectionType);
-            if(o != null){
-                for(Marker marker :o){
+            Type collectionType = new TypeToken<List<LatLng>>(){}.getType();
+            List<LatLng> o = gson.fromJson(jsonList, collectionType);
+            if(mMap != null && o != null){
+                for(LatLng latLng :o){
+
+                    Marker marker = mMap.addMarker(new MarkerOptions().position(latLng)
+                            .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED))
+                            .alpha(0.8f)
+                            .title(String.format("Position: (%.2f, %.2f)",latLng.latitude, latLng.longitude)));
                     markerList.add(marker);
                 }
             }
