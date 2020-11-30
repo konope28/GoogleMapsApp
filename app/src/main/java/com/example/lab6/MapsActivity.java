@@ -119,6 +119,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mMap.setOnMapLoadedCallback(this);
         mMap.setOnMarkerClickListener(this);
         mMap.setOnMapLongClickListener(this);
+        mMap.getUiSettings().setMapToolbarEnabled(false);
 
         sensorTextView.setVisibility(View.INVISIBLE);
         exitActionButton.setVisibility(View.INVISIBLE);
